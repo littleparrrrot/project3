@@ -1,6 +1,6 @@
 from flask import Flask, request, render_template
 from dash import Dash, dcc, html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 import requests
 
@@ -8,7 +8,7 @@ import requests
 app = Flask(__name__)
 app_dash = Dash(__name__, server=app, url_base_pathname='/dash/')
 
-API_KEY = "4zPGFpnLptk5jkr9Gf7cZc0noNwcOtg2"
+API_KEY = "LMBHhUWA0HgpqChN9kb1VutQHRABhIby"
 BASE_URL = "http://dataservice.accuweather.com/forecasts/v1/daily/1day/"
 
 
@@ -45,7 +45,9 @@ def get_city_weather(city_name):
         "latitude": latitude,
         "longitude": longitude,
         "temperature": forecast["Temperature"]["Maximum"]["Value"],
-        "rain_probability": forecast["Day"].get("RainProbability", 0)
+        "rain_probability": forecast["Day"].get("RainProbability", "Нет данных"),
+        "wind_speed": forecast["Day"].get("Wind", {}).get("Speed", {}).get("Value", "Нет данных"),
+        "humidity": forecast["Day"].get("RelativeHumidity", "Нет данных")
     }
 
 def get_current_conditions(location_key):
@@ -167,27 +169,38 @@ app_dash.layout = html.Div([
 
 app_dash_routes = Dash(__name__, server=app, url_base_pathname='/dash/route/')
 app_dash_routes.layout = html.Div([
-    html.H1("Маршрут с прогнозом погоды"),
+    html.H1("Маршрут и данные о погоде"),
     dcc.Textarea(
         id='cities-input-route',
         placeholder='Введите города через запятую (например, Москва, Санкт-Петербург)',
         style={'width': '100%', 'height': 100},
     ),
     html.Button('Обновить маршрут', id='update-route-button-route', n_clicks=0),
-    dcc.Graph(id='route-map')
+    html.Div([
+        dcc.Input(
+            id='min-temperature-input',
+            type='number',
+            placeholder='Минимальная температура',
+            style={'width': '50%'}
+        ),
+        dcc.Dropdown(
+            id='parameter-dropdown',
+            options=[
+                {'label': 'Температура', 'value': 'Temperature'},
+                {'label': 'Вероятность дождя', 'value': 'RainProbability'},
+                {'label': 'Скорость ветра', 'value': 'WindSpeed'},
+                {'label': 'Влажность', 'value': 'Humidity'}
+            ],
+            value='Temperature',
+            placeholder='Выберите параметр',
+        )
+    ]),
+    html.Div([
+        dcc.Graph(id='route-map', style={'display': 'inline-block', 'width': '48%'}),
+        dcc.Graph(id='weather-graph', style={'display': 'inline-block', 'width': '48%'})
+    ])
 ])
 
-@app_dash_routes.callback(
-    Output('route-map', 'figure'),
-    [Input('cities-input-route', 'value')]
-)
-
-def update_route_map(cities_input):
-    if not cities_input:
-        return go.Figure()
-
-    cities = [city.strip() for city in cities_input.split(',')]
-    return create_route_map(cities)
 
 def update_route_weather_graph_route(cities_input, parameter):
     if not cities_input or not parameter:
@@ -234,19 +247,31 @@ def update_route_weather_graph_route(cities_input, parameter):
     )
     return figure
 
-def create_route_map(cities):
-    lats, lons, locations, temperatures, rain_probabilities = [], [], [], [], []
+def create_route_map(cities, parameter):
+    lats, lons, locations, values = [], [], [], []
 
     for city in cities:
         city_data = get_city_weather(city)
         if not city_data:
+            print(f"Ошибка: данные для города '{city}' отсутствуют.")
             continue
 
         lats.append(city_data["latitude"])
         lons.append(city_data["longitude"])
         locations.append(city_data["city"])
-        temperatures.append(city_data["temperature"])
-        rain_probabilities.append(city_data["rain_probability"])
+
+        if parameter == 'Temperature':
+            values.append(city_data["temperature"])
+        elif parameter == 'RainProbability':
+            values.append(city_data["rain_probability"])
+        elif parameter == 'WindSpeed':
+            values.append(city_data["wind_speed"])
+        elif parameter == 'Humidity':
+            values.append(city_data["humidity"])
+        else:
+            values.append("Нет данных")
+
+    print(f"Координаты: {list(zip(locations, lats, lons))}")
 
     fig = go.Figure()
 
@@ -254,17 +279,26 @@ def create_route_map(cities):
         locationmode='ISO-3',
         lon=lons,
         lat=lats,
+        mode='lines',
+        line=dict(width=2, color='blue'),
+        name="Линия маршрута"
+    ))
+
+    fig.add_trace(go.Scattergeo(
+        locationmode='ISO-3',
+        lon=lons,
+        lat=lats,
         text=[
-            f"{loc}<br>Температура: {temp}°C<br>Вероятность дождя: {rain}%"
-            for loc, temp, rain in zip(locations, temperatures, rain_probabilities)
+            f"{loc}<br>Широта: {lat}<br>Долгота: {lon}<br>{parameter}: {value}"
+            for loc, lat, lon, value in zip(locations, lats, lons, values)
         ],
-        mode='markers+lines',
-        marker=dict(size=10, color='blue'),
-        name="Маршрут"
+        mode='markers',
+        marker=dict(size=10, color='red', symbol='circle'),
+        name="Города"
     ))
 
     fig.update_layout(
-        title="Маршрут с прогнозом погоды",
+        title=f"Маршрут с прогнозом: {parameter}",
         geo=dict(
             scope='world',
             projection_type='natural earth',
@@ -284,6 +318,64 @@ def home():
     <p><a href="/dash/">Графики для одного города</a></p>
     <p><a href="/dash/route">Графики для маршрута</a></p>
     '''
+
+@app_dash_routes.callback(
+    [Output('route-map', 'figure'),
+     Output('weather-graph', 'figure')],
+    [Input('update-route-button-route', 'n_clicks')],
+    [State('cities-input-route', 'value'),
+     State('parameter-dropdown', 'value'),
+     State('min-temperature-input', 'value')]
+)
+
+def update_route_and_graph(n_clicks, cities_input, parameter, min_temp):
+    if n_clicks is None or no.t cities_input or not parameter:
+        return go.Figure(), go.Figure()
+
+    cities = [city.strip() for city in cities_input.split(',')]
+    filtered_cities = []
+    weather_data = {"dates": [], "values": [], "labels": []}
+
+    for city in cities:
+        city_data = get_city_weather(city)
+        if not city_data:
+            continue
+
+        if min_temp is not None and city_data["temperature"] < min_temp:
+            continue
+
+        filtered_cities.append(city)
+
+        weather_data["dates"].append(city)
+        if parameter == 'Temperature':
+            weather_data["values"].append(city_data["temperature"])
+        elif parameter == 'RainProbability':
+            weather_data["values"].append(city_data["rain_probability"])
+        elif parameter == 'WindSpeed':
+            weather_data["values"].append(city_data["wind_speed"])
+        elif parameter == 'Humidity':
+            weather_data["values"].append(city_data["humidity"])
+        weather_data["labels"].append(parameter)
+
+    route_map = create_route_map(filtered_cities, parameter)
+
+    weather_graph = go.Figure(
+        data=[go.Bar(
+            x=weather_data["dates"],
+            y=weather_data["values"],
+            text=weather_data["values"],
+            textposition='auto',
+            marker=dict(color='orange')
+        )],
+        layout=go.Layout(
+            title=f"График {parameter} по городам маршрута",
+            xaxis=dict(title="Города"),
+            yaxis=dict(title=parameter)
+        )
+    )
+
+    return route_map, weather_graph
+
 
 if __name__ == "__main__":
     app.run(debug=True)
