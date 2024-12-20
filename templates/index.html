@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Прогноз погоды для маршрута</title>
+</head>
+<body>
+    <h1>Прогноз погоды для маршрута</h1>
+    <form method="POST" action="/">
+        <label for="start_city">Введите начальный город:</label>
+        <input type="text" id="start_city" name="start_city" required placeholder="Например, Москва">
+        <br><br>
+        <label for="end_city">Введите конечный город:</label>
+        <input type="text" id="end_city" name="end_city" required placeholder="Например, Санкт-Петербург">
+        <br><br>
+        <button type="submit">Получить прогноз</button>
+    </form>
+</body>
+</html>
