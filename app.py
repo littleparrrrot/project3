@@ -1,11 +1,16 @@
 from flask import Flask, request, render_template
+from dash import Dash, dcc, html
+from dash.dependencies import Input, Output
+import plotly.graph_objs as go
 import requests
 
 
 app = Flask(__name__)
+app_dash = Dash(__name__, server=app, url_base_pathname='/dash/')
 
 API_KEY = "4zPGFpnLptk5jkr9Gf7cZc0noNwcOtg2"
 BASE_URL = "http://dataservice.accuweather.com/forecasts/v1/daily/1day/"
+
 
 def get_weather(location_key):
     try:
@@ -119,6 +124,59 @@ def index():
 
     return render_template("index.html")
 
+
+app_dash.layout = html.Div([
+    html.H1("Прогноз погоды для маршрута"),
+    dcc.Graph(id='weather-graph'),
+    html.Div([
+        dcc.Input(
+            id='city-input',
+            type='text',
+            placeholder='Введите город',
+            debounce=True
+        ),
+        html.Button('Обновить', id='update-button', n_clicks=0)
+    ])
+])
+
+@app_dash.callback(
+    Output('weather-graph', 'figure'),
+    [Input('city-input', 'value')]
+)
+def update_weather_graph(city_name):
+    if not city_name:
+        return go.Figure()
+
+    location_key = get_location_key(city_name)
+    if not location_key:
+        return go.Figure()
+
+    weather_data = get_weather(location_key)
+    if not weather_data:
+        return go.Figure()
+
+    forecast = weather_data["DailyForecasts"]
+    dates = [day["Date"] for day in forecast]
+    temperatures = [day["Temperature"]["Maximum"]["Value"] for day in forecast]
+
+    figure = go.Figure(
+        data=[
+            go.Scatter(x=dates, y=temperatures, mode='lines+markers', name='Температура')
+        ],
+        layout=go.Layout(
+            title='Прогноз температуры',
+            xaxis=dict(title='Дата'),
+            yaxis=dict(title='Температура (°C)')
+        )
+    )
+    return figure
+
+@app.route("/")
+def home():
+    return '''
+    <h1>Прогноз погоды</h1>
+    <p><a href="/dash/">Открыть графики</a></p>
+    '''
 
 if __name__ == "__main__":
     app.run(debug=True)
