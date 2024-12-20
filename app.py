@@ -22,6 +22,32 @@ def get_weather(location_key):
         print(f"Ошибка при запросе данных: {e}")
         return None
 
+def get_city_weather(city_name):
+    url = f"http://dataservice.accuweather.com/locations/v1/cities/search?apikey={API_KEY}&q={city_name}"
+    response = requests.get(url)
+    if response.status_code != 200 or not response.json():
+        print(f"Ошибка: Город '{city_name}' не найден.")
+        return None
+
+    city_data = response.json()[0]
+    location_key = city_data["Key"]
+    latitude = city_data["GeoPosition"]["Latitude"]
+    longitude = city_data["GeoPosition"]["Longitude"]
+
+    weather_data = get_weather(location_key)
+    if not weather_data:
+        print(f"Ошибка: Не удалось получить данные о погоде для города '{city_name}'.")
+        return None
+
+    forecast = weather_data["DailyForecasts"][0]
+    return {
+        "city": city_name,
+        "latitude": latitude,
+        "longitude": longitude,
+        "temperature": forecast["Temperature"]["Maximum"]["Value"],
+        "rain_probability": forecast["Day"].get("RainProbability", 0)
+    }
+
 def get_current_conditions(location_key):
     try:
         url = f"http://dataservice.accuweather.com/currentconditions/v1/{location_key}?apikey={API_KEY}&details=true"
@@ -141,35 +167,27 @@ app_dash.layout = html.Div([
 
 app_dash_routes = Dash(__name__, server=app, url_base_pathname='/dash/route/')
 app_dash_routes.layout = html.Div([
-    html.H1("Прогноз погоды для маршрута"),
-    dcc.Graph(id='route-weather-graph-route'),
-    html.Div([
-        dcc.Textarea(
-            id='cities-input-route',
-            placeholder='Введите города через запятую (например, Москва, Санкт-Петербург)',
-            style={'width': '100%', 'height': 100},
-        ),
-        html.Button('Обновить маршрут', id='update-route-button-route', n_clicks=0)
-    ]),
-    html.Div([
-        dcc.Dropdown(
-            id='parameter-dropdown',
-            options=[
-                {'label': 'Температура', 'value': 'Temperature'},
-                {'label': 'Вероятность дождя', 'value': 'RainProbability'},
-                {'label': 'Скорость ветра', 'value': 'WindSpeed'}
-            ],
-            value='Temperature',
-            placeholder='Выберите параметр',
-        )
-    ])
+    html.H1("Маршрут с прогнозом погоды"),
+    dcc.Textarea(
+        id='cities-input-route',
+        placeholder='Введите города через запятую (например, Москва, Санкт-Петербург)',
+        style={'width': '100%', 'height': 100},
+    ),
+    html.Button('Обновить маршрут', id='update-route-button-route', n_clicks=0),
+    dcc.Graph(id='route-map')
 ])
 
 @app_dash_routes.callback(
-    Output('route-weather-graph-route', 'figure'),
-    [Input('cities-input-route', 'value'),
-     Input('parameter-dropdown', 'value')]
+    Output('route-map', 'figure'),
+    [Input('cities-input-route', 'value')]
 )
+
+def update_route_map(cities_input):
+    if not cities_input:
+        return go.Figure()
+
+    cities = [city.strip() for city in cities_input.split(',')]
+    return create_route_map(cities)
 
 def update_route_weather_graph_route(cities_input, parameter):
     if not cities_input or not parameter:
@@ -215,6 +233,49 @@ def update_route_weather_graph_route(cities_input, parameter):
         )
     )
     return figure
+
+def create_route_map(cities):
+    lats, lons, locations, temperatures, rain_probabilities = [], [], [], [], []
+
+    for city in cities:
+        city_data = get_city_weather(city)
+        if not city_data:
+            continue
+
+        lats.append(city_data["latitude"])
+        lons.append(city_data["longitude"])
+        locations.append(city_data["city"])
+        temperatures.append(city_data["temperature"])
+        rain_probabilities.append(city_data["rain_probability"])
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scattergeo(
+        locationmode='ISO-3',
+        lon=lons,
+        lat=lats,
+        text=[
+            f"{loc}<br>Температура: {temp}°C<br>Вероятность дождя: {rain}%"
+            for loc, temp, rain in zip(locations, temperatures, rain_probabilities)
+        ],
+        mode='markers+lines',
+        marker=dict(size=10, color='blue'),
+        name="Маршрут"
+    ))
+
+    fig.update_layout(
+        title="Маршрут с прогнозом погоды",
+        geo=dict(
+            scope='world',
+            projection_type='natural earth',
+            showland=True,
+            landcolor="rgb(217, 217, 217)",
+            showcountries=True,
+            countrycolor="rgb(255, 255, 255)"
+        )
+    )
+
+    return fig
 
 @app.route("/")
 def home():
