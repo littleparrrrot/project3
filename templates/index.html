@@ -17,9 +17,9 @@
         <label>Выберите параметр:</label>
         <select name="parameter">
             <option value="Temperature">Температура</option>
-            <option value="RainProbability">Вероятность дождя</option>
             <option value="WindSpeed">Скорость ветра</option>
             <option value="Humidity">Влажность</option>
+            <option value="RainProbability">Вероятность дождя</option>
         </select><br>
         <button type="submit">Построить маршрут</button>
     </form>
@@ -31,9 +31,10 @@
                 <li>
                     <b>{{ city }}</b>:<br>
                     <ul>
-                        {% for key, value in data.items() %}
-                            <li>{{ key }}: {{ value }}</li>
-                        {% endfor %}
+                        <li>Температура: {{ data["Температура"] }}</li>
+                        <li>Скорость ветра: {{ data["Скорость ветра"] }}</li>
+                        <li>Влажность: {{ data["Влажность"] }}</li>
+                        <li>Вероятность дождя: {{ data["Вероятность дождя"] }}</li>
                     </ul>
                 </li>
             {% endfor %}
@@ -43,8 +44,12 @@
             <iframe srcdoc="{{ map_html }}" width="100%" height="500"></iframe>
         </div>
         <div>
-            <h2>График {{ parameter }}</h2>
-            <iframe srcdoc="{{ graph_html }}" width="100%" height="500"></iframe>
+            <h2>График параметра: {{ parameter }}</h2>
+            {% if parameter == "RainProbability" %}
+                {{ graph_html | safe }}
+            {% else %}
+                <iframe srcdoc="{{ graph_html }}" width="100%" height="500"></iframe>
+            {% endif %}
         </div>
     {% endif %}
 </body>
