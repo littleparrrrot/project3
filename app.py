@@ -34,17 +34,26 @@ def get_city_weather(city_name):
     latitude = city_data["GeoPosition"]["Latitude"]
     longitude = city_data["GeoPosition"]["Longitude"]
 
+    current_data = get_current_conditions(location_key)
     weather_data = get_weather(location_key)
     if not weather_data:
         print(f"Ошибка: Не удалось получить данные о погоде для города '{city_name}'.")
         return None
 
     forecast = weather_data["DailyForecasts"][0]
+    temperature = forecast.get("Temperature", {}).get("Maximum", {}).get("Value", "N/A")
+    wind_speed = current_data.get("Wind", {}).get("Speed", {}).get("Metric", {}).get("Value", 0)
+    humidity = current_data.get("RelativeHumidity", "N/A")
 
-    temperature = forecast["Temperature"]["Maximum"]["Value"]
-    rain_probability = forecast["Day"].get("RainProbability", "Нет данных")
-    wind_speed = forecast["Day"].get("Wind", {}).get("Speed", {}).get("Value", "Нет данных")
-    humidity = forecast["Day"].get("RelativeHumidity", "Нет данных")
+    has_precipitation = current_data.get("HasPrecipitation", False)
+    precipitation_type = current_data.get("PrecipitationType", "")
+
+    if has_precipitation and precipitation_type == "Rain":
+        rain_probability = 100
+    else:
+        rain_probability = forecast.get("Day", {}).get("RainProbability", 0)
+
+    weather_result = check_bad_weather(temperature, wind_speed, rain_probability)
 
     return {
         "city": city_name,
@@ -53,7 +62,8 @@ def get_city_weather(city_name):
         "temperature": f"{temperature} °C",
         "rain_probability": f"{rain_probability} %",
         "wind_speed": f"{wind_speed} м/с",
-        "humidity": f"{humidity} %"
+        "humidity": f"{humidity} %",
+        "result": f"{weather_result}"
     }
 
 def get_current_conditions(location_key):
