@@ -8,7 +8,7 @@ import requests
 app = Flask(__name__)
 app_dash = Dash(__name__, server=app, url_base_pathname='/dash/')
 
-API_KEY = "0JkHCXF2Su5TFWxb6KGipN3TCTxNxJw8"
+API_KEY = "QJ82ByarvAoGA37HJ4rpCYvlIDnYrAED"
 BASE_URL = "http://dataservice.accuweather.com/forecasts/v1/daily/1day/"
 
 
@@ -112,10 +112,8 @@ def index():
         extra_points = request.form.get("extra_points", "")
         parameter = request.form.get("parameter", "Temperature")
 
-        # Формируем маршрут из городов
         cities = [start_point] + [city.strip() for city in extra_points.split(',') if city.strip()] + [end_point]
 
-        # Сбор данных о погоде
         weather_data = {}
         for city in cities:
             city_data = get_city_weather(city)
@@ -129,10 +127,8 @@ def index():
 
         print("Собранные данные о погоде:", weather_data)
 
-        # Генерация карты маршрута
         map_html = create_route_map(cities, parameter)._repr_html_()
 
-        # Генерация графика
         graph_content = create_weather_graph(cities, parameter)
 
         return render_template(
@@ -196,7 +192,6 @@ app_dash_routes.layout = html.Div([
 
 
 def create_weather_graph(cities, parameter):
-    """Создаёт график параметров для городов."""
     values = []
     labels = []
     rain_probabilities = {}
@@ -218,12 +213,10 @@ def create_weather_graph(cities, parameter):
             rain_probabilities[city] = rain_probability
 
     if parameter == "RainProbability":
-        # Вернуть текст вместо графика
         return f"<ul>" + "".join(
             [f"<li>{city}: {rain_probability}</li>" for city, rain_probability in rain_probabilities.items()]
         ) + "</ul>"
 
-    # Построение графика
     fig = go.Figure(
         data=[go.Bar(
             x=labels,
@@ -235,7 +228,7 @@ def create_weather_graph(cities, parameter):
         layout=go.Layout(
             title=f"График {parameter} по городам маршрута",
             xaxis=dict(title="Города"),
-            yaxis=dict(title=parameter, range=[0, max(values) * 1.2]),  # Ось Y начинается с нуля
+            yaxis=dict(title=parameter),  # Убираем фиксированный диапазон для оси OY
         )
     )
     return fig.to_html(full_html=False)
