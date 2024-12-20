@@ -127,46 +127,91 @@ def index():
 
 app_dash.layout = html.Div([
     html.H1("Прогноз погоды для маршрута"),
-    dcc.Graph(id='weather-graph'),
+    dcc.Graph(id='route-weather-graph'),
     html.Div([
-        dcc.Input(
-            id='city-input',
-            type='text',
-            placeholder='Введите город',
-            debounce=True
+        dcc.Textarea(
+            id='cities-input',
+            placeholder='Введите города через запятую (например, Москва, Санкт-Петербург)',
+            style={'width': '100%', 'height': 100},
         ),
-        html.Button('Обновить', id='update-button', n_clicks=0)
+        html.Button('Обновить маршрут', id='update-route-button', n_clicks=0)
     ])
 ])
 
-@app_dash.callback(
-    Output('weather-graph', 'figure'),
-    [Input('city-input', 'value')]
+
+app_dash_routes = Dash(__name__, server=app, url_base_pathname='/dash/route/')
+app_dash_routes.layout = html.Div([
+    html.H1("Прогноз погоды для маршрута"),
+    dcc.Graph(id='route-weather-graph-route'),
+    html.Div([
+        dcc.Textarea(
+            id='cities-input-route',
+            placeholder='Введите города через запятую (например, Москва, Санкт-Петербург)',
+            style={'width': '100%', 'height': 100},
+        ),
+        html.Button('Обновить маршрут', id='update-route-button-route', n_clicks=0)
+    ]),
+    html.Div([
+        dcc.Dropdown(
+            id='parameter-dropdown',
+            options=[
+                {'label': 'Температура', 'value': 'Temperature'},
+                {'label': 'Вероятность дождя', 'value': 'RainProbability'},
+                {'label': 'Скорость ветра', 'value': 'WindSpeed'}
+            ],
+            value='Temperature',
+            placeholder='Выберите параметр',
+        )
+    ])
+])
+
+@app_dash_routes.callback(
+    Output('route-weather-graph-route', 'figure'),
+    [Input('cities-input-route', 'value'),
+     Input('parameter-dropdown', 'value')]
 )
-def update_weather_graph(city_name):
-    if not city_name:
+
+def update_route_weather_graph_route(cities_input, parameter):
+    if not cities_input or not parameter:
         return go.Figure()
 
-    location_key = get_location_key(city_name)
-    if not location_key:
-        return go.Figure()
+    cities = [city.strip() for city in cities_input.split(',')]
+    data = []
+    dates = []
 
-    weather_data = get_weather(location_key)
-    if not weather_data:
-        return go.Figure()
+    for city in cities:
+        location_key = get_location_key(city)
+        if not location_key:
+            continue
 
-    forecast = weather_data["DailyForecasts"]
-    dates = [day["Date"] for day in forecast]
-    temperatures = [day["Temperature"]["Maximum"]["Value"] for day in forecast]
+        weather_data = get_weather(location_key)
+        if not weather_data:
+            continue
+
+        forecast = weather_data["DailyForecasts"]
+
+        city_dates = [day["Date"] for day in forecast]
+        if parameter == 'Temperature':
+            values = [day["Temperature"]["Maximum"]["Value"] for day in forecast]
+        elif parameter == 'RainProbability':
+            values = [day["Day"].get("RainProbability", 0) for day in forecast]
+        elif parameter == 'WindSpeed':
+            values = [day["Day"].get("Wind", {}).get("Speed", {}).get("Value", 0) for day in forecast]
+        else:
+            continue
+
+        if not dates:
+            dates = city_dates
+        data.append(go.Scatter(
+            x=city_dates, y=values, mode='lines+markers', name=f"{city} ({parameter})"
+        ))
 
     figure = go.Figure(
-        data=[
-            go.Scatter(x=dates, y=temperatures, mode='lines+markers', name='Температура')
-        ],
+        data=data,
         layout=go.Layout(
-            title='Прогноз температуры',
+            title=f'Прогноз {parameter} для маршрута',
             xaxis=dict(title='Дата'),
-            yaxis=dict(title='Температура (°C)')
+            yaxis=dict(title=parameter)
         )
     )
     return figure
@@ -175,7 +220,8 @@ def update_weather_graph(city_name):
 def home():
     return '''
     <h1>Прогноз погоды</h1>
-    <p><a href="/dash/">Открыть графики</a></p>
+    <p><a href="/dash/">Графики для одного города</a></p>
+    <p><a href="/dash/route">Графики для маршрута</a></p>
     '''
 
 if __name__ == "__main__":
