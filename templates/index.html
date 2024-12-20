@@ -3,18 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Прогноз погоды для маршрута</title>
+    <title>Погода для маршрута</title>
 </head>
 <body>
-    <h1>Прогноз погоды для маршрута</h1>
-    <form method="POST" action="/">
-        <label for="start_city">Введите начальный город:</label>
-        <input type="text" id="start_city" name="start_city" required placeholder="Например, Москва">
-        <br><br>
-        <label for="end_city">Введите конечный город:</label>
-        <input type="text" id="end_city" name="end_city" required placeholder="Например, Санкт-Петербург">
-        <br><br>
-        <button type="submit">Получить прогноз</button>
+    <h1>Погода для маршрута</h1>
+    <form action="/" method="post">
+        <label>Начальная точка:</label>
+        <input type="text" name="start_point" placeholder="Введите город" required><br>
+        <label>Конечная точка:</label>
+        <input type="text" name="end_point" placeholder="Введите город" required><br>
+        <label>Дополнительные города (через запятую):</label>
+        <textarea name="extra_points" placeholder="Введите города через запятую"></textarea><br>
+        <label>Выберите параметр:</label>
+        <select name="parameter">
+            <option value="Temperature">Температура</option>
+            <option value="RainProbability">Вероятность дождя</option>
+            <option value="WindSpeed">Скорость ветра</option>
+            <option value="Humidity">Влажность</option>
+        </select><br>
+        <button type="submit">Построить маршрут</button>
     </form>
+
+    {% if weather_data %}
+        <h2>Характеристики погоды для каждого города:</h2>
+        <ul>
+            {% for city, data in weather_data.items() %}
+                <li>
+                    <b>{{ city }}</b>:<br>
+                    <ul>
+                        {% for key, value in data.items() %}
+                            <li>{{ key }}: {{ value }}</li>
+                        {% endfor %}
+                    </ul>
+                </li>
+            {% endfor %}
+        </ul>
+        <div>
+            <h2>Карта маршрута:</h2>
+            <iframe srcdoc="{{ map_html }}" width="100%" height="500"></iframe>
+        </div>
+        <div>
+            <h2>График {{ parameter }}</h2>
+            <iframe srcdoc="{{ graph_html }}" width="100%" height="500"></iframe>
+        </div>
+    {% endif %}
 </body>
 </html>
