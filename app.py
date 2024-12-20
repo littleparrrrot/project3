@@ -8,7 +8,7 @@ import requests
 app = Flask(__name__)
 app_dash = Dash(__name__, server=app, url_base_pathname='/dash/')
 
-API_KEY = "OOff4dyl3znysqG0Si6G6ofjBQKFoU4y"
+API_KEY = "aJ8ZmUhrvyehGm73pAWpFw410mG0kpSf"
 BASE_URL = "http://dataservice.accuweather.com/forecasts/v1/daily/1day/"
 
 
@@ -23,7 +23,6 @@ def get_weather(location_key):
         return None
 
 def get_city_weather(city_name):
-    """Получает данные о городе и прогноз погоды по его названию."""
     url = f"http://dataservice.accuweather.com/locations/v1/cities/search?apikey={API_KEY}&q={city_name}"
     response = requests.get(url)
     if response.status_code != 200 or not response.json():
@@ -35,7 +34,6 @@ def get_city_weather(city_name):
     latitude = city_data["GeoPosition"]["Latitude"]
     longitude = city_data["GeoPosition"]["Longitude"]
 
-    # Запрос прогноза погоды
     weather_data = get_weather(location_key)
     if not weather_data:
         print(f"Ошибка: Не удалось получить данные о погоде для города '{city_name}'.")
@@ -43,7 +41,6 @@ def get_city_weather(city_name):
 
     forecast = weather_data["DailyForecasts"][0]
 
-    # Извлечение данных с проверкой на наличие
     temperature = forecast["Temperature"]["Maximum"]["Value"]
     rain_probability = forecast["Day"].get("RainProbability", "Нет данных")
     wind_speed = forecast["Day"].get("Wind", {}).get("Speed", {}).get("Value", "Нет данных")
@@ -100,16 +97,13 @@ def get_location_key(city):
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        # Старая логика
         start_point = request.form.get("start_point")
         end_point = request.form.get("end_point")
         parameter = request.form.get("parameter", "Temperature")
 
-        # Новый функционал: обработка дополнительных городов
         extra_points = request.form.get("extra_points", "")
         cities = [start_point] + [city.strip() for city in extra_points.split(',') if city.strip()] + [end_point]
 
-        # Сбор данных о погоде
         weather_data = {}
         for city in cities:
             city_data = get_city_weather(city)
@@ -121,13 +115,10 @@ def index():
                     "Влажность": city_data["humidity"]
                 }
 
-        # Генерация карты маршрута
         map_html = create_route_map(cities, parameter)._repr_html_()
 
-        # Генерация графика
         graph_html = create_weather_graph(cities, parameter)
 
-        # Передаём все данные в шаблон
         return render_template(
             "index.html",
             start_point=start_point,
@@ -138,7 +129,6 @@ def index():
             graph_html=graph_html
         )
 
-    # GET запрос - просто отображение формы
     return render_template("index.html")
 
 
@@ -263,7 +253,6 @@ def update_route_weather_graph_route(cities_input, parameter):
     return figure
 
 def create_route_map(cities, parameter):
-    """Создаёт интерактивную карту маршрута с выбранным параметром."""
     lats, lons, locations, values = [], [], [], []
 
     for city in cities:
@@ -276,7 +265,6 @@ def create_route_map(cities, parameter):
         lons.append(city_data["longitude"])
         locations.append(city_data["city"])
 
-        # Выбор параметра для отображения
         if parameter == 'Temperature':
             values.append(city_data["temperature"])
         elif parameter == 'RainProbability':
@@ -288,10 +276,8 @@ def create_route_map(cities, parameter):
         else:
             values.append("Нет данных")
 
-    # Создание карты
     fig = go.Figure()
 
-    # Добавляем линии маршрута
     fig.add_trace(go.Scattergeo(
         locationmode='ISO-3',
         lon=lons,
@@ -301,7 +287,6 @@ def create_route_map(cities, parameter):
         name="Линия маршрута"
     ))
 
-    # Добавляем маркеры для городов
     fig.add_trace(go.Scattergeo(
         locationmode='ISO-3',
         lon=lons,
@@ -358,13 +343,11 @@ def update_route_and_graph(n_clicks, cities_input, parameter, min_temp):
         if not city_data:
             continue
 
-        # Фильтрация по минимальной температуре
         if min_temp is not None and city_data["temperature"] < min_temp:
             continue
 
         filtered_cities.append(city)
 
-        # Собираем данные для графиков
         weather_data["dates"].append(city)
         if parameter == 'Temperature':
             weather_data["values"].append(city_data["temperature"])
@@ -376,10 +359,8 @@ def update_route_and_graph(n_clicks, cities_input, parameter, min_temp):
             weather_data["values"].append(city_data["humidity"])
         weather_data["labels"].append(parameter)
 
-    # Генерация карты маршрута
     route_map = create_route_map(filtered_cities, parameter)
 
-    # Генерация графика
     weather_graph = go.Figure(
         data=[go.Bar(
             x=weather_data["dates"],
